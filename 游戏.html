@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="x5-fullscreen" content="true">
+    <meta name="full-screen" content="yes">
+    <title>方块大闯关</title>
+    <style>
+        * { 
+            margin: 0; padding: 0; box-sizing: border-box; 
+            user-select: none; -webkit-user-select: none; 
+            /* 禁用微信长按菜单 */
+            -webkit-touch-callout: none; 
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            /* 柔和渐变底色，避免白屏刺眼 */
+            background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
+            /* 微信等移动端最安全的系统字体栈 */
+            font-family: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            overflow: hidden; display: flex; justify-content: center; align-items: center;
+            height: 100vh; width: 100vw;
+        }
+
+        #game-container {
+            position: relative; width: 100%; height: 100%; max-width: 428px;
+            background: transparent; display: flex; flex-direction: column;
+            box-shadow: 0 0 20px rgba(139, 69, 19, 0.1);
+        }
+
+        /* 微信顶部提示条 */
+        .wechat-tip {
+            width: 100%; background: rgba(255, 255, 255, 0.6);
+            color: #8D6E63; font-size: 11px; text-align: center; padding: 4px 0;
+            font-weight: bold; z-index: 20; letter-spacing: 0.5px;
+            backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+        }
+
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 15px; height: 95px; z-index: 10; position: relative;
+        }
+
+        .title-box { display: flex; flex-direction: column; align-items: flex-start; }
+        
+        .title-box h1 {
+            font-size: 22px; font-weight: 900; color: #5D4037; 
+            text-shadow: 0 2px 4px rgba(255, 255, 255, 0.8), 0 4px 6px rgba(139, 69, 19, 0.2);
+        }
+        
+        .record-text { font-size: 11px; color: #8D6E63; font-weight: 900; margin-top: 2px; }
+        
+        .header-controls { display: flex; gap: 8px; margin-top: 5px; }
+
+        /* 微信规范：按钮热区至少 44px 高度 */
+        .btn-small {
+            background: rgba(255,255,255,0.85); border: 2px solid #8D6E63; color: #5D4037;
+            border-radius: 12px; font-size: 12px; font-weight: 900; cursor: pointer;
+            box-shadow: 0 2px 4px rgba(93, 64, 55, 0.1); display: flex; align-items: center; justify-content: center;
+            min-height: 40px; min-width: 44px; padding: 0 12px;
+            transition: opacity 0.2s;
+        }
+
+        .btn-small:active { opacity: 0.6; }
+
+        .level-info { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 55%; }
+
+        .level-title {
+            font-size: 20px; font-weight: 900; color: #D84315;
+            text-shadow: 0 2px 4px rgba(255,255,255,0.8); display: flex; align-items: center; gap: 8px;
+        }
+
+        .difficulty-text { font-size: 10px; color: #BF360C; font-weight: bold; background: rgba(255,255,255,0.6); padding: 2px 6px; border-radius: 8px;}
+
+        .targets-container { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+
+        .target-box {
+            background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+            padding: 3px 6px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.8);
+            box-shadow: 0 2px 5px rgba(139, 69, 19, 0.1);
+            display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 900; color: #5D4037;
+            min-height: 30px;
+        }
+        
+        .target-box.completed { background: #E8F5E9; border-color: #81C784; color: #2E7D32; }
+
+        canvas#gameCanvas {
+            flex: 1; width: 100%; touch-action: none; z-index: 1;
+            /* 强制开启硬件加速 */
+            transform: translateZ(0); will-change: contents;
+        }
+
+        /* 弹窗通用样式 */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 250, 240, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        
+        .overlay.active { opacity: 1; pointer-events: auto; }
+
+        /* 启动存档界面 */
+        .startup-box {
+            background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            padding: 30px 20px; border-radius: 20px; border: 3px solid rgba(255,255,255,1);
+            box-shadow: 0 10px 25px rgba(139, 69, 19, 0.2);
+            display: flex; flex-direction: column; align-items: center; gap: 20px;
+            width: 85%; max-width: 320px;
+        }
+
+        .startup-msg { font-size: 16px; color: #5D4037; font-weight: 900; text-align: center; line-height: 1.5; }
+        .btn-group { display: flex; gap: 15px; width: 100%; justify-content: center;}
+
+        .overlay-title {
+            font-size: 36px; color: #D84315; margin-bottom: 5px; font-weight: 900;
+            text-shadow: 0 4px 8px rgba(255, 255, 255, 0.9), 0 2px 4px rgba(216, 67, 21, 0.3);
+        }
+
+        .overlay-subtitle { font-size: 16px; margin-bottom: 25px; color: #6D4C41; font-weight: 900; text-align: center;}
+
+        /* 大按钮：微信内手指极易点击 */
+        .btn {
+            background: linear-gradient(to bottom, #FF8A65 0%, #D84315 100%); color: #FFF;
+            border: 3px solid #FFF; padding: 12px 0; font-size: 18px; border-radius: 30px;
+            font-weight: 900; box-shadow: 0 6px 15px rgba(216, 67, 21, 0.4); cursor: pointer;
+            transition: transform 0.1s; text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            min-height: 50px; min-width: 120px; flex: 1; text-align: center;
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(to bottom, #FFCCBC 0%, #FFAB91 100%); color: #D84315;
+            border: 3px solid #FFF; padding: 12px 0; font-size: 16px; border-radius: 30px;
+            font-weight: 900; box-shadow: 0 4px 10px rgba(216, 67, 21, 0.2); cursor: pointer;
+            min-height: 50px; min-width: 120px; flex: 1; text-align: center;
+        }
+
+        .btn:active, .btn-secondary:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div class="wechat-tip">⭐ 收藏本页面，下次聊天窗口下拉即可快速打开</div>
+    <header>
+        <div class="title-box">
+            <h1>方块大闯关</h1>
+            <div class="record-text" id="recordText">最高记录: 第1关</div>
+            <div class="header-controls">
+                <button id="resetBtn" class="btn-small" style="opacity: 0.85;">↺ 重头开始</button>
+                <button id="muteBtn" class="btn-small">🔊</button>
+            </div>
+        </div>
+        <div class="level-info">
+            <div class="level-title">
+                <span id="levelTitle">第 1 关</span>
+                <span class="difficulty-text" id="diffText">难度: 1</span>
+            </div>
+            <div class="targets-container" id="targetsUI"></div>
+        </div>
+    </header>
+    
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="statusOverlay" class="overlay">
+        <div class="overlay-title" id="overlayTitle">游戏结束</div>
+        <canvas id="popupFruitCanvas" width="120" height="120" style="margin-bottom: 5px;"></canvas>
+        <div class="overlay-subtitle" id="overlaySubtitle">没有空间放置方块了</div>
+        <button class="btn" id="overlayBtn" style="flex:none; padding: 12px 40px;">再试一次</button>
+    </div>
+
+    <div id="startupOverlay" class="overlay" style="z-index: 200;">
+        <div class="startup-box">
+            <div class="overlay-title" style="font-size: 32px;">欢迎回来</div>
+            <div class="startup-msg" id="startupMsg">检测到上次游戏进度<br>已通过 第 X 关</div>
+            <div class="btn-group">
+                <button class="btn" id="btnContinue">继续</button>
+                <button class="btn-secondary" id="btnRestartAll">重玩</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+console.log('[系统] 脚本开始解析，适配微信浏览器环境...');
+
+/* ==============================================================
+ * 0. 存档管理器 (Storage API) 兼容无痕模式
+ * ============================================================== */
+const SAVE_KEY = "blockGame_saveData";
+const OLD_KEY = "blockPuzzleMaxLevel";
+
+function getSaveData() {
+    try {
+        let data = localStorage.getItem(SAVE_KEY);
+        if (data) return JSON.parse(data);
+        let old = localStorage.getItem(OLD_KEY);
+        if (old) return { passedLevel: parseInt(old), difficulty: parseInt(old), highestLevel: parseInt(old) };
+    } catch (e) { console.warn("[存档] 读取数据出错", e); }
+    return null;
+}
+
+function setSaveData(passedLevel, difficulty, highestLevel) {
+    try {
+        const data = JSON.stringify({ passedLevel, difficulty, highestLevel });
+        localStorage.setItem(SAVE_KEY, data);
+        localStorage.setItem(OLD_KEY, highestLevel); 
+    } catch (e) { console.warn("[存档] 写入数据出错", e); }
+}
+
+function clearSaveData() {
+    try {
+        localStorage.removeItem(SAVE_KEY); localStorage.removeItem(OLD_KEY);
+    } catch (e) {}
+}
+
+/* ==============================================================
+ * 1. 核心常量与静态矢量资源
+ * ============================================================== */
+const CONSTANTS = {
+    GRID_SIZE: 9,
+    COLORS: ['#D35400', '#F39C12', '#C0392B', '#F1C40F', '#8E44AD', '#E67E22', '#A04000', '#D32F2F'],
+    TARGET_TYPES: ['star', 'heart', 'drop', 'cherry', 'leaf']
+};
+
+const SHAPE_DEFS = [
+    { blocks: 1, matrix: [[1]], colorIdx: 0 }, { blocks: 2, matrix: [[1,1]], colorIdx: 1 }, { blocks: 2, matrix: [[1],[1]], colorIdx: 1 }, 
+    { blocks: 3, matrix: [[1,1,1]], colorIdx: 2 }, { blocks: 3, matrix: [[1],[1],[1]], colorIdx: 2 }, 
+    { blocks: 4, matrix: [[1,1,1,1]], colorIdx: 3 }, { blocks: 4, matrix: [[1],[1],[1],[1]], colorIdx: 3 }, 
+    { blocks: 5, matrix: [[1,1,1,1,1]], colorIdx: 4 }, { blocks: 5, matrix: [[1],[1],[1],[1],[1]], colorIdx: 4 }, 
+    { blocks: 4, matrix: [[1,1],[1,1]], colorIdx: 5 }, { blocks: 3, matrix: [[1,1],[1,0]], colorIdx: 6 }, 
+    { blocks: 3, matrix: [[1,1],[0,1]], colorIdx: 6 }, { blocks: 3, matrix: [[1,0],[1,1]], colorIdx: 6 }, { blocks: 3, matrix: [[0,1],[1,1]], colorIdx: 6 }, 
+    { blocks: 5, matrix: [[1,1,1],[1,0,0],[1,0,0]], colorIdx: 7 }, { blocks: 5, matrix: [[1,1,1],[0,0,1],[0,0,1]], colorIdx: 7 }, 
+    { blocks: 5, matrix: [[1,0,0],[1,0,0],[1,1,1]], colorIdx: 7 }, { blocks: 5, matrix: [[0,0,1],[0,0,1],[1,1,1]], colorIdx: 7 }, 
+    { blocks: 4, matrix: [[1,1,1],[0,1,0]], colorIdx: 0 }, { blocks: 4, matrix: [[0,1,0],[1,1,1]], colorIdx: 0 }, 
+    { blocks: 4, matrix: [[1,0],[1,1],[1,0]], colorIdx: 0 }, { blocks: 4, matrix: [[0,1],[1,1],[0,1]], colorIdx: 0 }, 
+    { blocks: 4, matrix: [[1,1,0],[0,1,1]], colorIdx: 1 }, { blocks: 4, matrix: [[0,1,1],[1,1,0]], colorIdx: 1 }, 
+    { blocks: 5, matrix: [[0,1,0],[1,1,1],[0,1,0]], colorIdx: 2 } 
+];
+
+const FRUITS = [
+    { name: 'watermelon', draw: (ctx) => { ctx.fillStyle='#FFCDD2'; ctx.beginPath(); ctx.arc(0,5,40,0,Math.PI); ctx.fill(); ctx.lineWidth=6; ctx.strokeStyle='#C8E6C9'; ctx.stroke(); ctx.lineWidth=3; ctx.strokeStyle='#FFF'; ctx.stroke(); ctx.fillStyle='#795548'; [[-15,15],[15,15],[0,25],[-25,5],[25,5]].forEach(p=>{ctx.beginPath(); ctx.ellipse(p[0],p[1],2,4,0,0,Math.PI*2); ctx.fill();}); } },
+    { name: 'strawberry', draw: (ctx) => { ctx.fillStyle='#FFCDD2'; ctx.beginPath(); ctx.moveTo(0,-10); ctx.bezierCurveTo(40,-40,50,20,0,45); ctx.bezierCurveTo(-50,20,-40,-40,0,-10); ctx.fill(); ctx.fillStyle='#FFF'; [[-15,5],[15,5],[0,20],[-10,25],[10,25],[0,5],[-20,-5],[20,-5]].forEach(p=>{ctx.beginPath(); ctx.arc(p[0],p[1],1.5,0,Math.PI*2); ctx.fill();}); ctx.fillStyle='#DCEDC8'; ctx.beginPath(); ctx.moveTo(0,-10); ctx.quadraticCurveTo(20,-25,30,-15); ctx.quadraticCurveTo(15,-5,0,-5); ctx.quadraticCurveTo(-15,-5,-30,-15); ctx.quadraticCurveTo(-20,-25,0,-10); ctx.fill(); } },
+    { name: 'orange', draw: (ctx) => { ctx.fillStyle='#FFE0B2'; ctx.beginPath(); ctx.arc(0,0,40,0,Math.PI*2); ctx.fill(); ctx.lineWidth=4; ctx.strokeStyle='#FFF'; ctx.stroke(); ctx.beginPath(); ctx.arc(0,0,32,0,Math.PI*2); ctx.stroke(); for(let i=0;i<8;i++){ let a=(i*Math.PI)/4; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*32,Math.sin(a)*32); ctx.stroke(); } } },
+    { name: 'lemon', draw: (ctx) => { ctx.fillStyle='#FFF9C4'; ctx.beginPath(); if(ctx.ellipse) ctx.ellipse(0,0,45,30,Math.PI/4,0,Math.PI*2); else ctx.arc(0,0,40,0,Math.PI*2); ctx.fill(); ctx.lineWidth=4; ctx.strokeStyle='#FFF'; ctx.stroke(); for(let i=0;i<6;i++){ let a=(i*Math.PI)/3+Math.PI/4; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*25,Math.sin(a)*25); ctx.stroke(); } } },
+    { name: 'grape', draw: (ctx) => { ctx.fillStyle='#E1BEE7'; [[-10,30],[10,30],[0,42],[-20,15],[0,15],[20,15],[-15,0],[15,0],[0,0]].forEach(p=>{ctx.beginPath(); ctx.arc(p[0],p[1],14,0,Math.PI*2); ctx.fill();}); ctx.lineWidth=4; ctx.strokeStyle='#DCEDC8'; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(0,-12); ctx.quadraticCurveTo(-15,-30,-5,-45); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-10,-25); ctx.quadraticCurveTo(15,-25,25,-15); ctx.stroke(); } },
+    { name: 'pineapple', draw: (ctx) => { ctx.fillStyle='#FFF9C4'; ctx.beginPath(); if(ctx.ellipse) ctx.ellipse(0,15,28,35,0,0,Math.PI*2); else ctx.arc(0,15,30,0,Math.PI*2); ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle='#FFE0B2'; for(let i=-20;i<=20;i+=12){ ctx.beginPath(); ctx.moveTo(i-20,-10); ctx.lineTo(i+20,45); ctx.stroke(); ctx.beginPath(); ctx.moveTo(i+20,-10); ctx.lineTo(i-20,45); ctx.stroke(); } ctx.fillStyle='#DCEDC8'; ctx.beginPath(); ctx.moveTo(-15,-15); ctx.lineTo(-25,-40); ctx.lineTo(-5,-20); ctx.lineTo(0,-50); ctx.lineTo(5,-20); ctx.lineTo(25,-40); ctx.lineTo(15,-15); ctx.fill(); } },
+    { name: 'cherry', draw: (ctx) => { ctx.fillStyle='#FFCDD2'; ctx.beginPath(); ctx.arc(-20,20,18,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(20,20,18,0,Math.PI*2); ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle='#DCEDC8'; ctx.beginPath(); ctx.moveTo(-20,5); ctx.quadraticCurveTo(-5,-20,0,-35); ctx.stroke(); ctx.beginPath(); ctx.moveTo(20,5); ctx.quadraticCurveTo(5,-20,0,-35); ctx.stroke(); ctx.fillStyle='#C8E6C9'; ctx.beginPath(); ctx.ellipse(15,-35,12,6,Math.PI/4,0,Math.PI*2); ctx.fill(); } },
+    { name: 'peach', draw: (ctx) => { ctx.fillStyle='#FFE0B2'; ctx.beginPath(); ctx.arc(0,5,35,0,Math.PI*2); ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle='#FFCDD2'; ctx.beginPath(); ctx.moveTo(0,-30); ctx.quadraticCurveTo(-10,5,0,40); ctx.stroke(); ctx.fillStyle='#DCEDC8'; ctx.beginPath(); ctx.ellipse(15,-25,15,8,-Math.PI/6,0,Math.PI*2); ctx.fill(); } }
+];
+
+/* ==============================================================
+ * 2. 微信专属音频管理器
+ * ============================================================== */
+class AudioManager {
+    constructor() {
+        this.ctx = null; this.masterGain = null;
+        this.isMuted = localStorage.getItem('blockPuzzleMuted') === 'true';
+        this.initialized = false;
+        this.bgmOsc = null; this.bgmGain = null; this.nextNoteTime = 0;
+        this.BGM_NOTES = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25];
+        
+        // 绑定全局解锁方法 (处理微信和 iOS Safari 的限制)
+        this._unlockHandler = this._unlockAudio.bind(this);
+        document.addEventListener('touchstart', this._unlockHandler, { once: true, capture: true });
+        document.addEventListener('click', this._unlockHandler, { once: true, capture: true });
+    }
+
+    _unlockAudio() {
+        if (this.initialized) return;
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            this.ctx = new AudioContext();
+            this.masterGain = this.ctx.createGain();
+            this.masterGain.gain.value = this.isMuted ? 0 : 1;
+            this.masterGain.connect(this.ctx.destination);
+            
+            // 播放微信静音激活音
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            gain.gain.value = 0;
+            osc.connect(gain); gain.connect(this.ctx.destination);
+            osc.start(0); osc.stop(this.ctx.currentTime + 0.01);
+            
+            this.initialized = true;
+            console.log('[音频] WeChat / iOS Safari 上下文已解锁');
+            this.startBGM();
+        } catch(e) { console.warn('[音频] 解锁失败', e); }
+    }
+
+    ensureActive() {
+        if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume().then(() => console.log('[音频] Context Resumed'));
+        }
+    }
+
+    toggleMute() {
+        this.isMuted = !this.isMuted;
+        localStorage.setItem('blockPuzzleMuted', this.isMuted);
+        if (this.masterGain && this.ctx) {
+            this.ensureActive();
+            this.masterGain.gain.setTargetAtTime(this.isMuted ? 0 : 1, this.ctx.currentTime, 0.1);
+        }
+        return this.isMuted;
+    }
+
+    startBGM() {
+        if (!this.ctx || this.bgmOsc) return;
+        this.bgmOsc = this.ctx.createOscillator(); this.bgmOsc.type = 'triangle';
+        this.bgmGain = this.ctx.createGain(); this.bgmGain.gain.value = 0;
+        this.bgmOsc.connect(this.bgmGain); this.bgmGain.connect(this.masterGain);
+        this.bgmOsc.start();
+        this.nextNoteTime = this.ctx.currentTime + 0.1;
+    }
+
+    scheduleBGM() {
+        if (!this.ctx || !this.bgmOsc || this.isMuted) return;
+        while (this.nextNoteTime < this.ctx.currentTime + 0.5) {
+            const freq = this.BGM_NOTES[Math.floor(Math.random() * this.BGM_NOTES.length)];
+            const duration = 0.8 + Math.random() * 0.4;
+            this.bgmOsc.frequency.setValueAtTime(freq, this.nextNoteTime);
+            this.bgmGain.gain.setValueAtTime(0, this.nextNoteTime);
+            this.bgmGain.gain.linearRampToValueAtTime(0.12, this.nextNoteTime + 0.05);
+            this.bgmGain.gain.exponentialRampToValueAtTime(0.001, this.nextNoteTime + duration - 0.1);
+            this.nextNoteTime += duration;
+        }
+    }
+
+    playBubble(comboCount) {
+        if (!this.ctx || this.isMuted) return;
+        this.ensureActive();
+        for (let i = 0; i < comboCount; i++) {
+            const t = this.ctx.currentTime + i * 0.08;
+            const osc1 = this.ctx.createOscillator(), osc2 = this.ctx.createOscillator(), g = this.ctx.createGain();
+            const f = 600 + Math.random() * 200;
+            osc1.type = 'sine'; osc2.type = 'sine';
+            osc1.frequency.value = f; osc2.frequency.value = f * 2; 
+            g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+            osc1.connect(g); osc2.connect(g); g.connect(this.masterGain);
+            osc1.start(t); osc2.start(t+0.02); osc1.stop(t+0.15); osc2.stop(t+0.17);
+        }
+    }
+
+    playPlace() {
+        if (!this.ctx || this.isMuted) return;
+        this.ensureActive();
+        const t = this.ctx.currentTime, osc = this.ctx.createOscillator(), g = this.ctx.createGain();
+        osc.frequency.setValueAtTime(400, t); osc.frequency.exponentialRampToValueAtTime(250, t + 0.08);
+        g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+        osc.connect(g); g.connect(this.masterGain); osc.start(t); osc.stop(t+0.08);
+    }
+
+    playGameOver() {
+        if (!this.ctx || this.isMuted) return;
+        this.ensureActive();
+        [600, 400, 200].forEach((f, i) => {
+            const t = this.ctx.currentTime + i * 0.15, osc = this.ctx.createOscillator(), g = this.ctx.createGain();
+            osc.frequency.value = f; g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+            osc.connect(g); g.connect(this.masterGain); osc.start(t); osc.stop(t+0.15);
+        });
+    }
+
+    playLevelClear() {
+        if (!this.ctx || this.isMuted) return;
+        this.ensureActive();
+        [400, 500, 600, 800].forEach((f, i) => {
+            const t = this.ctx.currentTime + i * 0.1, osc = this.ctx.createOscillator(), g = this.ctx.createGain();
+            osc.frequency.value = f; g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+            osc.connect(g); g.connect(this.masterGain); osc.start(t); osc.stop(t+0.2);
+        });
+    }
+
+    playCollect() {
+        if (!this.ctx || this.isMuted) return;
+        this.ensureActive();
+        const t = this.ctx.currentTime, osc = this.ctx.createOscillator(), g = this.ctx.createGain();
+        osc.type = 'sine'; osc.frequency.setValueAtTime(1200, t);
+        g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+        osc.connect(g); g.connect(this.masterGain); osc.start(t); osc.stop(t+0.3);
+    }
+}
+
+/* ==============================================================
+ * 3. 渲染引擎
+ * ============================================================== */
+class Renderer {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d', { alpha: false });
+        this.off1 = document.createElement('canvas'); this.oCtx1 = this.off1.getContext('2d');
+        this.off2 = document.createElement('canvas'); this.oCtx2 = this.off2.getContext('2d');
+        this.activeOff = this.off1; this.oldOff = null;
+        this.layout = { width: 0, height: 0, cell: 0, bx: 0, by: 0, ty: 0, tCell: 0 };
+    }
+
+    resize(gridSize) {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2); // 限制微信最高渲染倍率
+        const rect = this.canvas.parentElement.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        this.layout.width = rect.width; this.layout.height = rect.height;
+        this.canvas.width = rect.width * dpr; this.canvas.height = rect.height * dpr;
+        this.ctx.scale(dpr, dpr);
+
+        this.layout.cell = Math.floor(Math.min((rect.width * 0.95) / gridSize, (rect.height * 0.55) / gridSize));
+        this.layout.bx = (rect.width - this.layout.cell * gridSize) / 2;
+        this.layout.by = 5;
+        this.layout.tCell = this.layout.cell * 0.45;
+        
+        const boardBottom = this.layout.by + this.layout.cell * gridSize;
+        this.layout.ty = boardBottom + (rect.height - boardBottom) * 0.15;
+        return dpr;
+    }
+
+    updateOffscreen(dpr, fruitIndex, gridSize) {
+        const target = this.activeOff === this.off1 ? this.off2 : this.off1;
+        const tCtx = target === this.off1 ? this.oCtx1 : this.oCtx2;
+        const w = this.layout.width, h = this.layout.height;
+        
+        target.width = w * dpr; target.height = h * dpr; tCtx.scale(dpr, dpr);
+        
+        const grad = tCtx.createLinearGradient(0, 0, w, h);
+        grad.addColorStop(0, '#FFF3E0'); grad.addColorStop(0.5, '#FFE0B2'); grad.addColorStop(1, '#FFCCBC');
+        tCtx.fillStyle = grad; tCtx.fillRect(0, 0, w, h);
+
+        const drawF = (x,y,s,a) => {
+            tCtx.save(); tCtx.globalAlpha = a; tCtx.translate(x, y); tCtx.scale(s/100, s/100);
+            FRUITS[fruitIndex % FRUITS.length].draw(tCtx); tCtx.restore();
+        };
+        drawF(w*0.2, h*0.15, w*0.35, 0.15); drawF(w*0.8, h*0.85, w*0.35, 0.15); drawF(w*0.5, h*0.5, w*0.45, 0.12);
+
+        const bX = this.layout.bx, bY = this.layout.by, bS = this.layout.cell * gridSize;
+        tCtx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        tCtx.beginPath();
+        tCtx.roundRect ? tCtx.roundRect(bX, bY, bS, bS, 12) : tCtx.fillRect(bX, bY, bS, bS);
+        tCtx.fill();
+
+        tCtx.strokeStyle = 'rgba(255, 255, 255, 0.7)'; tCtx.lineWidth = 2;
+        tCtx.shadowColor = 'rgba(255, 255, 255, 0.8)'; tCtx.shadowBlur = 4;
+        tCtx.beginPath();
+        for(let i=0; i<=gridSize; i++) {
+            tCtx.moveTo(bX, bY + i*this.layout.cell); tCtx.lineTo(bX+bS, bY + i*this.layout.cell);
+            tCtx.moveTo(bX + i*this.layout.cell, bY); tCtx.lineTo(bX + i*this.layout.cell, bY+bS);
+        }
+        tCtx.stroke(); tCtx.shadowColor = 'transparent';
+
+        tCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        tCtx.beginPath();
+        if(tCtx.roundRect) {
+            tCtx.roundRect(10, this.layout.ty - 15, w - 20, this.layout.tCell * 5 + 30, 20);
+            tCtx.fill(); tCtx.strokeStyle='rgba(255,255,255,0.8)'; tCtx.lineWidth=2; tCtx.stroke();
+        }
+        this.oldOff = this.activeOff; this.activeOff = target;
+    }
+
+    drawJellyBlock(ctx, x, y, size, color, alpha=1, scale=1) {
+        ctx.save(); ctx.globalAlpha = alpha;
+        const offset = (size - size * scale) / 2;
+        const pSize = size * scale, gap = 1.5, radius = pSize * 0.3; 
+        const innerSize = pSize - gap * 2, bx = x + offset + gap, by = y + offset + gap;
+
+        ctx.beginPath();
+        ctx.moveTo(bx + radius, by); ctx.lineTo(bx + innerSize - radius, by);
+        ctx.quadraticCurveTo(bx + innerSize, by, bx + innerSize, by + radius);
+        ctx.lineTo(bx + innerSize, by + innerSize - radius);
+        ctx.quadraticCurveTo(bx + innerSize, by + innerSize, bx + innerSize - radius, by + innerSize);
+        ctx.lineTo(bx + radius, by + innerSize);
+        ctx.quadraticCurveTo(bx, by + innerSize, bx, by + innerSize - radius);
+        ctx.lineTo(bx, by + radius); ctx.quadraticCurveTo(bx, by, bx + radius, by);
+        ctx.closePath();
+
+        ctx.fillStyle = color;
+        ctx.shadowColor = 'rgba(93, 64, 55, 0.4)'; ctx.shadowOffsetY = 2; ctx.shadowBlur = 4;
+        ctx.fill(); ctx.shadowColor = 'transparent'; 
+
+        ctx.beginPath(); ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        if(ctx.ellipse) ctx.ellipse(bx + innerSize*0.3, by + innerSize*0.25, innerSize*0.15, innerSize*0.08, -Math.PI/8, 0, Math.PI*2);
+        else ctx.arc(bx + innerSize*0.3, by + innerSize*0.25, innerSize*0.1, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    drawObstacle(ctx, x, y, size) {
+        ctx.save();
+        const gap = 2, bx = x + gap, by = y + gap, inner = size - gap*2;
+        ctx.fillStyle = '#78909C'; 
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(bx, by, inner, inner, 8) : ctx.fillRect(bx, by, inner, inner);
+        ctx.fill();
+        ctx.strokeStyle = '#455A64'; ctx.lineWidth = 1.5; ctx.beginPath();
+        ctx.moveTo(bx + inner*0.2, by); ctx.lineTo(bx + inner*0.4, by + inner*0.5); ctx.lineTo(bx + inner*0.8, by + inner*0.8);
+        ctx.moveTo(bx + inner*0.4, by + inner*0.5); ctx.lineTo(bx, by + inner*0.6);
+        ctx.stroke(); ctx.restore();
+    }
+
+    drawIcon(ctx, type, cx, cy, size, alpha=1) {
+        ctx.save(); ctx.globalAlpha = alpha; ctx.translate(cx, cy);
+        const s = size * 0.35; 
+        
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+        ctx.shadowBlur = 8;
+
+        if (type === 'star') {
+            ctx.fillStyle = '#FFD54F'; 
+            ctx.beginPath();
+            for(let i=0; i<5; i++) {
+                ctx.lineTo(Math.cos((18+i*72)/180*Math.PI)*s, -Math.sin((18+i*72)/180*Math.PI)*s);
+                ctx.lineTo(Math.cos((54+i*72)/180*Math.PI)*(s*0.4), -Math.sin((54+i*72)/180*Math.PI)*(s*0.4));
+            }
+            ctx.closePath(); 
+        } else if (type === 'heart') {
+            ctx.fillStyle = '#E53935'; 
+            ctx.beginPath(); const hs = s*0.7;
+            ctx.moveTo(0, hs); ctx.bezierCurveTo(-hs*2, -hs, -hs*1.5, -hs*2.5, 0, -hs*1.5);
+            ctx.bezierCurveTo(hs*1.5, -hs*2.5, hs*2, -hs, 0, hs); 
+        } else if (type === 'drop') {
+            ctx.fillStyle = '#29B6F6'; 
+            ctx.beginPath(); ctx.moveTo(0, -s); ctx.bezierCurveTo(s, -s*0.2, s, s, 0, s); ctx.bezierCurveTo(-s, s, -s, -s*0.2, 0, -s); 
+        } else if (type === 'cherry') {
+            ctx.fillStyle = '#D32F2F'; 
+            ctx.beginPath(); ctx.arc(-s*0.4, s*0.4, s*0.4, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(s*0.4, s*0.4, s*0.4, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#66BB6A'; ctx.lineWidth = 2; ctx.shadowBlur=0;
+            ctx.beginPath(); ctx.moveTo(-s*0.4, s*0.1); ctx.quadraticCurveTo(-s*0.2, -s*0.6, 0, -s*0.8); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(s*0.4, s*0.1); ctx.quadraticCurveTo(s*0.2, -s*0.6, 0, -s*0.8); ctx.stroke();
+            ctx.restore(); return;
+        } else if (type === 'leaf') {
+            ctx.fillStyle = '#66BB6A';
+            ctx.beginPath(); ctx.moveTo(0, -s);
+            ctx.quadraticCurveTo(s, -s/2, s, s); ctx.quadraticCurveTo(-s, -s/2, 0, -s);
+        }
+        
+        ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = '#FFFFFF'; ctx.stroke();
+        ctx.restore();
+    }
+}
+
+/* ==============================================================
+ * 4. 游戏核心类
+ * ============================================================== */
+class Game {
+    constructor(savedData = null) {
+        this.renderer = new Renderer(document.getElementById('gameCanvas'));
+        this.audio = new AudioManager();
+        
+        if (savedData) {
+            this.level = savedData.passedLevel + 1;
+            this.difficulty = savedData.difficulty;
+            this.highestLevel = savedData.highestLevel || savedData.passedLevel;
+        } else {
+            this.level = 1; this.difficulty = 1;
+            let sd = getSaveData();
+            this.highestLevel = sd ? (sd.highestLevel || 1) : 1;
+        }
+        
+        this.continuousWins = 0; this.retries = 0;
+        this.fruitIndex = 0; this.state = 'playing'; 
+        
+        this.grid = []; this.iconGrid = []; this.tray = [];
+        this.targets = []; this.animations = [];
+        this.levelConfig = {};
+        
+        this.drag = { active: false, id: null, idx: -1, shape: null, cx: 0, cy: 0, ox: 0, oy: 0, gx: -1, gy: -1 };
+        this.lastTime = 0;
+        this.gameOverTimer = null;
+        
+        this.bindEvents();
+    }
+
+    start() {
+        document.getElementById('recordText').innerText = `最高记录: 第${this.highestLevel}关`;
+        let dpr = this.renderer.resize(CONSTANTS.GRID_SIZE);
+        if(!dpr) dpr = 1; 
+
+        this.initLevel(dpr);
+        requestAnimationFrame(this.loop.bind(this));
+    }
+
+    bindEvents() {
+        window.addEventListener('resize', () => {
+            const dpr = this.renderer.resize(CONSTANTS.GRID_SIZE);
+            if(dpr) this.renderer.updateOffscreen(dpr, this.fruitIndex, CONSTANTS.GRID_SIZE);
+        });
+
+        // 屏蔽微信/浏览器默认的右键、长按菜单
+        window.addEventListener('contextmenu', e => e.preventDefault());
+
+        const cvs = this.renderer.canvas;
+        
+        // 关键微信防拉痕：强制阻止画布区域的 touchmove 默认行为
+        cvs.addEventListener('touchmove', e => { e.preventDefault(); }, { passive: false });
+
+        cvs.addEventListener('pointerdown', e => {
+            if (this.state !== 'playing' || this.drag.active) return;
+            const rect = cvs.getBoundingClientRect();
+            const x = e.clientX - rect.left, y = e.clientY - rect.top;
+
+            for (let i = 0; i < this.tray.length; i++) {
+                const shape = this.tray[i];
+                if (!shape || !shape.active) continue;
+                const cols = shape.matrix[0].length, rows = shape.matrix.length;
+                const pad = 25, tCell = this.renderer.layout.tCell;
+                
+                if (x >= shape.x - pad && x <= shape.x + cols * tCell + pad &&
+                    y >= shape.y - pad && y <= shape.y + rows * tCell + pad) {
+                    
+                    this.drag.active = true; this.drag.id = e.pointerId; this.drag.idx = i;
+                    this.drag.shape = shape; this.drag.cx = x; this.drag.cy = y;
+                    this.drag.ox = -(cols * this.renderer.layout.cell) / 2;
+                    this.drag.oy = -(rows * this.renderer.layout.cell) - 60; 
+                    cvs.setPointerCapture(e.pointerId); break;
+                }
+            }
+        });
+
+        cvs.addEventListener('pointermove', e => {
+            if (!this.drag.active || e.pointerId !== this.drag.id) return;
+            const rect = cvs.getBoundingClientRect();
+            this.drag.cx = e.clientX - rect.left; this.drag.cy = e.clientY - rect.top;
+            
+            const dx = this.drag.cx + this.drag.ox, dy = this.drag.cy + this.drag.oy;
+            this.drag.gx = Math.round((dx - this.renderer.layout.bx) / this.renderer.layout.cell);
+            this.drag.gy = Math.round((dy - this.renderer.layout.by) / this.renderer.layout.cell);
+        });
+
+        cvs.addEventListener('pointerup', e => {
+            if (!this.drag.active || e.pointerId !== this.drag.id) return;
+            cvs.releasePointerCapture(e.pointerId);
+            
+            const shape = this.drag.shape, gX = this.drag.gx, gY = this.drag.gy;
+            if (this.canPlace(shape.matrix, gX, gY)) {
+                this.placeShape(shape, gX, gY);
+                this.audio.playPlace();
+                this.tray[this.drag.idx] = null;
+                this.checkClears();
+                
+                if (this.state === 'playing') {
+                    if (this.tray.every(s => s === null)) this.fillTray();
+                    if (this.gameOverTimer) clearTimeout(this.gameOverTimer);
+                    this.gameOverTimer = setTimeout(() => this.checkGameOver(), 300);
+                }
+            }
+            this.drag.active = false;
+        });
+
+        cvs.addEventListener('pointercancel', e => {
+            if (this.drag.active && this.drag.id === e.pointerId) {
+                this.drag.active = false; cvs.releasePointerCapture(e.pointerId);
+            }
+        });
+
+        // 按钮交互
+        document.getElementById('muteBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isMuted = this.audio.toggleMute();
+            document.getElementById('muteBtn').innerText = isMuted ? '🔇' : '🔊';
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            if (confirm("确定要重新开始吗？当前进度将会完全丢失。")) {
+                clearSaveData(); location.reload(); 
+            }
+        });
+
+        document.getElementById('overlayBtn').addEventListener('click', () => {
+            document.getElementById('statusOverlay').classList.remove('active');
+            this.retries++; this.continuousWins=0;
+            this.initLevel();
+        });
+    }
+
+    loadNextLevel() {
+        if (this.gameOverTimer) clearTimeout(this.gameOverTimer);
+        
+        if (this.continuousWins >= 3) this.difficulty++;
+        if (this.retries <= 3) this.difficulty++;
+        
+        let passedLevel = this.level;
+        this.level++;
+        this.highestLevel = Math.max(this.highestLevel, this.level);
+        
+        this.retries = 0; this.continuousWins++;
+        
+        setSaveData(passedLevel, this.difficulty, this.highestLevel);
+        this.initLevel();
+    }
+
+    generateConfig() {
+        let maxTypes = this.difficulty >= 10 ? 3 : (this.difficulty >= 5 ? 2 : 1);
+        let tCountTray = this.difficulty >= 13 ? 1 : (this.difficulty >= 6 ? 2 : 3);
+        let maxSize = this.difficulty >= 9 ? 5 : (this.difficulty >= 4 ? 4 : 3);
+        let oCount = Math.min(Math.max(0, Math.floor(this.difficulty * 1.2) + (Math.random()<0.5?1:-1)*Math.floor(Math.random()*3)), 20);
+
+        this.levelConfig = { maxSize, trayCount: tCountTray, obsCount: oCount, targetTypes: maxTypes };
+    }
+
+    initLevel(dpr = window.devicePixelRatio || 1) {
+        this.state = 'playing';
+        this.drag = { active: false, id: null, idx: -1, shape: null, cx: 0, cy: 0, ox: 0, oy: 0, gx: -1, gy: -1 };
+        this.animations = [];
+        
+        document.getElementById('recordText').innerText = `最高记录: 第${this.highestLevel}关`;
+        document.getElementById('levelTitle').innerText = `第 ${this.level} 关`;
+        document.getElementById('diffText').innerText = `难度: ${this.difficulty}`;
+        
+        let oldFruit = this.fruitIndex;
+        this.fruitIndex = (this.level - 1) % FRUITS.length;
+
+        this.generateConfig();
+        this.grid = Array(CONSTANTS.GRID_SIZE).fill().map(() => Array(CONSTANTS.GRID_SIZE).fill(0));
+        this.iconGrid = Array(CONSTANTS.GRID_SIZE).fill().map(() => Array(CONSTANTS.GRID_SIZE).fill(null));
+
+        let pObs = 0;
+        while(pObs < this.levelConfig.obsCount) {
+            let r = Math.floor(Math.random() * CONSTANTS.GRID_SIZE), c = Math.floor(Math.random() * CONSTANTS.GRID_SIZE);
+            if (this.grid[r][c] === 0) { this.grid[r][c] = -1; pObs++; }
+        }
+
+        let avT = [...CONSTANTS.TARGET_TYPES].sort(()=>0.5-Math.random());
+        let selT = avT.slice(0, this.levelConfig.targetTypes);
+        this.targets = selT.map(t => {
+            let amount = Math.min(5, 1 + Math.floor(this.difficulty / 3) + Math.floor(Math.random()*2));
+            return { type: t, curr: 0, max: amount };
+        });
+
+        let initialBlocks = Math.min(4, this.targets.reduce((sum, t) => sum + t.max, 0));
+        let pTgtBlocks = 0, poolIdx = 0;
+        while(pTgtBlocks < initialBlocks) {
+            let r = Math.floor(Math.random() * CONSTANTS.GRID_SIZE), c = Math.floor(Math.random() * CONSTANTS.GRID_SIZE);
+            if (this.grid[r][c] === 0) {
+                this.grid[r][c] = CONSTANTS.COLORS[Math.floor(Math.random() * CONSTANTS.COLORS.length)];
+                this.iconGrid[r][c] = this.targets[poolIdx % this.targets.length].type;
+                pTgtBlocks++; poolIdx++;
+            }
+        }
+
+        this.updateTargetsUI();
+        
+        this.renderer.updateOffscreen(Math.min(dpr, 2), this.fruitIndex, CONSTANTS.GRID_SIZE);
+        if(oldFruit !== this.fruitIndex && this.level > 1) {
+            this.animations.push({ type: 'bg_fade', time: 0, duration: 500 });
+        }
+        
+        this.fillTray();
+    }
+
+    updateTargetsUI() {
+        const ui = document.getElementById('targetsUI'); ui.innerHTML = '';
+        this.targets.forEach(t => {
+            const div = document.createElement('div'); div.className = 'target-box';
+            let emoji = '⭐'; if(t.type==='heart') emoji='❤️'; if(t.type==='drop') emoji='💧'; if(t.type==='cherry') emoji='🍒'; if(t.type==='leaf') emoji='🍃';
+            div.innerHTML = `<span>${emoji}</span> <span id="tgt-${t.type}">${t.curr}/${t.max}</span>`;
+            if (t.curr >= t.max) div.classList.add('completed');
+            ui.appendChild(div);
+        });
+    }
+
+    fillTray() {
+        this.tray = [];
+        let vSh = SHAPE_DEFS.filter(s => s.blocks <= this.levelConfig.maxSize);
+        if (this.difficulty >= 9) {
+            let bSh = vSh.filter(s => s.blocks === 5);
+            vSh = vSh.concat(bSh).concat(bSh);
+        }
+        
+        for (let i = 0; i < this.levelConfig.trayCount; i++) {
+            const d = vSh[Math.floor(Math.random() * vSh.length)];
+            let shape = { matrix: d.matrix, color: CONSTANTS.COLORS[d.colorIdx], active: true, x:0, y:0, icon: null };
+            
+            let needed = this.targets.filter(t => t.curr < t.max);
+            if (needed.length > 0 && Math.random() < 0.65) { 
+                let t = needed[Math.floor(Math.random() * needed.length)];
+                let blocks = [];
+                for(let r=0; r<d.matrix.length; r++) {
+                    for(let c=0; c<d.matrix[r].length; c++) {
+                        if(d.matrix[r][c]===1) blocks.push({r,c});
+                    }
+                }
+                let b = blocks[Math.floor(Math.random()*blocks.length)];
+                shape.icon = { r: b.r, c: b.c, type: t.type };
+            }
+            this.tray.push(shape);
+        }
+        
+        if(this.renderer.layout.width > 0) {
+            const sw = this.renderer.layout.width / this.levelConfig.trayCount;
+            this.tray.forEach((s, i) => {
+                if(!s) return;
+                s.x = (sw * i) + (sw - s.matrix[0].length * this.renderer.layout.tCell) / 2;
+                s.y = this.renderer.layout.ty;
+            });
+        }
+    }
+
+    canPlace(matrix, gx, gy) {
+        const rows = matrix.length, cols = matrix[0].length;
+        if (gx < 0 || gy < 0 || gx + cols > CONSTANTS.GRID_SIZE || gy + rows > CONSTANTS.GRID_SIZE) return false;
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                if (matrix[r][c] === 1 && this.grid[gy + r][gx + c] !== 0) return false;
+            }
+        }
+        return true;
+    }
+
+    placeShape(shape, gx, gy) {
+        for (let r = 0; r < shape.matrix.length; r++) {
+            for (let c = 0; c < shape.matrix[0].length; c++) {
+                if (shape.matrix[r][c] === 1) {
+                    this.grid[gy + r][gx + c] = shape.color;
+                    if (shape.icon && shape.icon.r === r && shape.icon.c === c) {
+                        this.iconGrid[gy + r][gx + c] = shape.icon.type;
+                    }
+                    this.animations.push({ type: 'pop', x: gx+c, y: gy+r, color: shape.color, time: 0, duration: 150 });
+                }
+            }
+        }
+    }
+
+    checkClears() {
+        let rClr = [], cClr = [];
+        for (let r = 0; r < CONSTANTS.GRID_SIZE; r++) { if (this.grid[r].every(v => v !== 0)) rClr.push(r); }
+        for (let c = 0; c < CONSTANTS.GRID_SIZE; c++) {
+            let full = true;
+            for (let r = 0; r < CONSTANTS.GRID_SIZE; r++) { if (this.grid[r][c] === 0) { full = false; break; } }
+            if (full) cClr.push(c);
+        }
+
+        const total = rClr.length + cClr.length;
+        if (total > 0) {
+            this.audio.playBubble(total);
+            let bAnim = [], collected = false;
+            
+            const proc = (r, c) => {
+                if(this.grid[r][c] !== -1 && this.grid[r][c] !== 0) {
+                    bAnim.push({r, c, color: this.grid[r][c]}); this.grid[r][c] = 0;
+                }
+                if(this.iconGrid[r][c] !== null) {
+                    let type = this.iconGrid[r][c];
+                    let td = this.targets.find(t=>t.type===type);
+                    if(td && td.curr < td.max) {
+                        td.curr++; 
+                        document.getElementById(`tgt-${type}`).innerText = `${td.curr}/${td.max}`;
+                        if(td.curr >= td.max) this.updateTargetsUI();
+                        this.animations.push({ type: 'fly', icon: type, sx: c, sy: r, time: 0, duration: 600 });
+                        collected = true;
+                    }
+                    this.iconGrid[r][c] = null;
+                }
+            };
+            rClr.forEach(r => { for(let c=0; c<CONSTANTS.GRID_SIZE; c++) proc(r,c); });
+            cClr.forEach(c => { for(let r=0; r<CONSTANTS.GRID_SIZE; r++) proc(r,c); });
+            
+            if(collected) this.audio.playCollect();
+            bAnim.forEach(b => this.animations.push({ type: 'fade', x: b.c, y: b.r, color: b.color, time: 0, duration: 200 }));
+            
+            this.checkWin();
+        }
+    }
+
+    checkWin() {
+        if (this.targets.every(t => t.curr >= t.max)) {
+            this.state = 'clearing'; 
+            if (this.gameOverTimer) clearTimeout(this.gameOverTimer);
+
+            this.audio.playLevelClear();
+            this.animations.push({ type: 'win_bounce', time: 0, duration: 1500 });
+            
+            setTimeout(() => {
+                this.loadNextLevel();
+            }, 1500);
+        }
+    }
+
+    checkGameOver() {
+        if(this.state !== 'playing') return;
+        let canFit = false;
+        for(let i=0; i<this.tray.length; i++) {
+            let shape = this.tray[i]; if(!shape) continue;
+            for(let y=0; y<CONSTANTS.GRID_SIZE; y++) {
+                for(let x=0; x<CONSTANTS.GRID_SIZE; x++) {
+                    if(this.canPlace(shape.matrix, x, y)) { canFit = true; break; }
+                }
+                if(canFit) break;
+            }
+            if(canFit) break;
+        }
+
+        if(!canFit && this.tray.some(s => s !== null)) {
+            this.state = 'gameover'; this.audio.playGameOver();
+            document.getElementById('statusOverlay').classList.add('active');
+        }
+    }
+
+    loop(timestamp) {
+        const dt = timestamp - this.lastTime; this.lastTime = timestamp;
+        
+        for(let i = this.animations.length-1; i>=0; i--) {
+            this.animations[i].time += dt;
+            if(this.animations[i].time >= this.animations[i].duration) this.animations.splice(i, 1);
+        }
+        
+        this.audio.scheduleBGM();
+        
+        const r = this.renderer, ctx = r.ctx, lay = r.layout;
+        ctx.clearRect(0, 0, lay.width, lay.height);
+        
+        let bgFade = this.animations.find(a => a.type === 'bg_fade');
+        if(bgFade && r.oldOff) {
+            let p = bgFade.time / bgFade.duration;
+            ctx.globalAlpha = 1 - p; ctx.drawImage(r.oldOff, 0, 0, lay.width, lay.height);
+            ctx.globalAlpha = p; ctx.drawImage(r.activeOff, 0, 0, lay.width, lay.height);
+            ctx.globalAlpha = 1;
+        } else if (r.activeOff.width > 0) {
+            ctx.drawImage(r.activeOff, 0, 0, lay.width, lay.height);
+        }
+
+        for(let y=0; y<CONSTANTS.GRID_SIZE; y++) {
+            for(let x=0; x<CONSTANTS.GRID_SIZE; x++) {
+                const px = lay.bx + x*lay.cell, py = lay.by + y*lay.cell;
+                if(this.grid[y][x] === -1) r.drawObstacle(ctx, px, py, lay.cell);
+                else if(this.grid[y][x] !== 0) {
+                    if(!this.animations.find(a=>a.type==='fade' && a.x===x && a.y===y)) 
+                        r.drawJellyBlock(ctx, px, py, lay.cell, this.grid[y][x]);
+                }
+                
+                if(this.iconGrid[y][x]) {
+                    let floatY = Math.sin(timestamp/200) * 2;
+                    r.drawIcon(ctx, this.iconGrid[y][x], px + lay.cell/2, py + lay.cell/2 + floatY, lay.cell);
+                }
+            }
+        }
+
+        for(let i=0; i<this.animations.length; i++) {
+            let a = this.animations[i], p = a.time/a.duration, px = lay.bx + (a.x||0)*lay.cell, py = lay.by + (a.y||0)*lay.cell;
+            if(a.type==='fade') r.drawJellyBlock(ctx, px, py, lay.cell, a.color, 1-p, 1+p*0.3);
+            else if(a.type==='pop') r.drawJellyBlock(ctx, px, py, lay.cell, a.color, 1, p<0.5 ? 1+p*0.2 : 1.2-(p-0.5)*0.2);
+            else if(a.type==='fly') {
+                const sx = lay.bx + a.sx*lay.cell + lay.cell/2, sy = lay.by + a.sy*lay.cell + lay.cell/2;
+                const ease = 1-Math.pow(1-p, 3), cx = sx + (lay.width/2 - sx)*ease, cy = sy + (40 - sy)*ease - Math.sin(p*Math.PI)*50;
+                r.drawIcon(ctx, a.icon, cx, cy, lay.cell, 1-p);
+            }
+        }
+
+        this.tray.forEach((s, idx) => {
+            if(!s || (this.drag.active && this.drag.idx === idx)) return;
+            for(let rIdx=0; rIdx<s.matrix.length; rIdx++) {
+                for(let cIdx=0; cIdx<s.matrix[0].length; cIdx++) {
+                    if(s.matrix[rIdx][cIdx]===1) {
+                        let px = s.x+cIdx*lay.tCell, py = s.y+rIdx*lay.tCell;
+                        r.drawJellyBlock(ctx, px, py, lay.tCell, s.color);
+                        if (s.icon && s.icon.r === rIdx && s.icon.c === cIdx) {
+                            r.drawIcon(ctx, s.icon.type, px + lay.tCell/2, py + lay.tCell/2, lay.tCell);
+                        }
+                    }
+                }
+            }
+        });
+
+        if (this.drag.active) {
+            const mat = this.drag.shape.matrix, gx = this.drag.gx, gy = this.drag.gy, valid = this.canPlace(mat, gx, gy);
+            if (gx >= -mat[0].length && gx <= CONSTANTS.GRID_SIZE && gy >= -mat.length && gy <= CONSTANTS.GRID_SIZE) {
+                for(let rIdx=0; rIdx<mat.length; rIdx++) {
+                    for(let cIdx=0; cIdx<mat[0].length; cIdx++) {
+                        if(mat[rIdx][cIdx]===1 && gx+cIdx>=0 && gx+cIdx<CONSTANTS.GRID_SIZE && gy+rIdx>=0 && gy+rIdx<CONSTANTS.GRID_SIZE) {
+                            r.drawJellyBlock(ctx, lay.bx+(gx+cIdx)*lay.cell, lay.by+(gy+rIdx)*lay.cell, lay.cell, valid?this.drag.shape.color:'#D32F2F', 0.5);
+                        }
+                    }
+                }
+            }
+            const dx = this.drag.cx + this.drag.ox, dy = this.drag.cy + this.drag.oy;
+            for(let rIdx=0; rIdx<mat.length; rIdx++) {
+                for(let cIdx=0; cIdx<mat[0].length; cIdx++) {
+                    if(mat[rIdx][cIdx]===1) {
+                        ctx.save(); ctx.shadowColor='rgba(139,69,19,0.3)'; ctx.shadowBlur=12; ctx.shadowOffsetY=8;
+                        let px = dx+cIdx*lay.cell, py = dy+rIdx*lay.cell;
+                        r.drawJellyBlock(ctx, px, py, lay.cell, this.drag.shape.color, 0.95, 1.15);
+                        if (this.drag.shape.icon && this.drag.shape.icon.r === rIdx && this.drag.shape.icon.c === cIdx) {
+                            r.drawIcon(ctx, this.drag.shape.icon.type, px + lay.cell/2, py + lay.cell/2, lay.cell);
+                        }
+                        ctx.restore();
+                    }
+                }
+            }
+        }
+        
+        let winAnim = this.animations.find(a => a.type === 'win_bounce');
+        if (winAnim) {
+            let p = winAnim.time / winAnim.duration;
+            ctx.save();
+            ctx.translate(lay.width/2, lay.height/2);
+            let scale = 1 + Math.sin(p * Math.PI * 4) * 0.15; 
+            ctx.scale(scale, scale);
+            ctx.font = '900 45px system-ui, -apple-system, sans-serif';
+            ctx.fillStyle = '#D84315'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.shadowColor = '#FFF'; ctx.shadowBlur = 10;
+            ctx.fillText('过关！', 0, 0);
+            ctx.restore();
+        }
+        
+        requestAnimationFrame(this.loop.bind(this));
+    }
+}
+
+/* ==============================================================
+ * 5. 初始化与弹窗处理
+ * ============================================================== */
+window.onload = () => {
+    let saveData = getSaveData();
+    if (saveData && saveData.passedLevel > 0) {
+        const overlay = document.getElementById('startupOverlay');
+        document.getElementById('startupMsg').innerHTML = `检测到上次游戏进度<br>已通过 第 ${saveData.passedLevel} 关`;
+        overlay.classList.add('active');
+
+        document.getElementById('btnContinue').onclick = () => {
+            overlay.classList.remove('active');
+            window.game = new Game(saveData);
+            window.game.start();
+        };
+
+        document.getElementById('btnRestartAll').onclick = () => {
+            clearSaveData();
+            overlay.classList.remove('active');
+            window.game = new Game(null);
+            window.game.start();
+        };
+    } else {
+        window.game = new Game(null);
+        window.game.start();
+    }
+};
+</script>
+</body>
+</html>
